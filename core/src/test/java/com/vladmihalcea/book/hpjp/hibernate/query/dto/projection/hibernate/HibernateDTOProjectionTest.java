@@ -2,13 +2,15 @@ package com.vladmihalcea.book.hpjp.hibernate.query.dto.projection.hibernate;
 
 import com.vladmihalcea.book.hpjp.hibernate.forum.dto.PostDTO;
 import com.vladmihalcea.book.hpjp.hibernate.query.dto.projection.Post;
+import com.vladmihalcea.book.hpjp.hibernate.query.dto.projection.jpa.JPADTOProjectionTest;
 import com.vladmihalcea.book.hpjp.util.AbstractTest;
+import com.vladmihalcea.hibernate.type.util.ListResultTransformer;
+import org.hibernate.query.Query;
 import org.hibernate.transform.Transformers;
 import org.junit.Test;
 
-import java.sql.Timestamp;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -87,6 +89,59 @@ public class HibernateDTOProjectionTest extends AbstractTest {
         } );
     }
 
+    @Test
+    public void testRecord() {
+        doInJPA(entityManager -> {
+            List<PostRecord> postRecords = entityManager.createQuery("""
+                select 
+                    p.id,
+                    p.title,
+                    p.createdOn,
+                    p.createdBy,
+                    p.updatedOn,
+                    p.updatedBy
+                from Post p
+                """)
+            .unwrap(Query.class)
+            .setResultTransformer(
+                (ListResultTransformer) (tuple, aliases) -> {
+                    int i =0;
+                    return new PostRecord(
+                        ((Number) tuple[i++]).longValue(),
+                        (String) tuple[i++],
+                        new AuditRecord(
+                            (LocalDateTime) tuple[i++],
+                            (String) tuple[i++],
+                            (LocalDateTime) tuple[i++],
+                            (String) tuple[i++]
+                        )
+                    );
+                }
+            )
+            .getResultList();
+
+            assertEquals(1, postRecords.size());
+
+            PostRecord postRecord = postRecords.get(0);
+
+            assertEquals(
+                1L, postRecord.id().longValue()
+            );
+
+            assertEquals(
+                "High-Performance Java Persistence", postRecord.title()
+            );
+
+            assertEquals(
+                LocalDateTime.of(2016, 11, 2, 12, 0, 0), postRecord.audit().createdOn()
+            );
+
+            assertEquals(
+                "Vlad Mihalcea", postRecord.audit().createdBy()
+            );
+        });
+    }
+
     public static class PostDTO {
 
         private Long id;
@@ -108,5 +163,20 @@ public class HibernateDTOProjectionTest extends AbstractTest {
         public void setTitle(String title) {
             this.title = title;
         }
+    }
+
+    public static record PostRecord(
+        Long id,
+        String title,
+        AuditRecord audit
+    ) {
+    }
+
+    public static record AuditRecord(
+        LocalDateTime createdOn,
+        String createdBy,
+        LocalDateTime updatedOn,
+        String updatedBy
+    ) {
     }
 }
